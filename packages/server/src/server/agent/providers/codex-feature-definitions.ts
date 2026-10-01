@@ -38,16 +38,31 @@ export const CODEX_PLAN_MODE_FEATURE: Omit<AgentFeatureToggle, "value"> = {
   icon: "list-todo",
 };
 
+export const CODEX_OPENSPEC_PLANNING_FEATURE: Omit<AgentFeatureToggle, "value"> = {
+  type: "toggle",
+  id: "openspec_planning",
+  label: "OpenSpec planning",
+  description: "Plan here and apply agreed changes in a child agent",
+  tooltip: "Toggle OpenSpec planning preference",
+  icon: "list-todo",
+};
+
 export function buildCodexFeatures(input: {
   serviceTiers: CodexServiceTier[];
   serviceTier: string;
   planModeEnabled: boolean;
   planModeAvailable?: boolean;
+  openspecPlanningEnabled?: boolean;
 }): AgentFeature[] {
   const features = buildCodexSpeedFeature(input.serviceTiers, input.serviceTier);
   if (input.planModeAvailable !== false) {
     features.push({ ...CODEX_PLAN_MODE_FEATURE, value: input.planModeEnabled });
   }
+
+  features.push({
+    ...CODEX_OPENSPEC_PLANNING_FEATURE,
+    value: input.openspecPlanningEnabled === true,
+  });
   return features;
 }
 

@@ -1995,6 +1995,12 @@ export class AgentManager {
     await agent.session.setFeature(featureId, value);
     await this.drainSessionEvents(agentId);
     agent.config.featureValues = { ...agent.config.featureValues, [featureId]: value };
+    if (featureId === "openspec_planning" && value === true) {
+      agent.config.featureValues.plan_mode = false;
+    }
+    if (featureId === "plan_mode" && value === true) {
+      agent.config.featureValues.openspec_planning = false;
+    }
     this.touchUpdatedAt(agent);
     this.emitState(agent);
   }

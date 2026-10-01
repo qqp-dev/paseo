@@ -133,6 +133,57 @@ async function createConnectedSession(
 }
 
 describe("Codex app-server provider features", () => {
+  test("OpenSpec preference uses user context and ordinary mode without replacing instructions", async () => {
+    const { session, appServer } = await createConnectedSession({
+      featureValues: { openspec_planning: true, plan_mode: true },
+      systemPrompt: "Existing project guidance",
+    });
+    try {
+      expect(session.features).toContainEqual(
+        expect.objectContaining({ id: "openspec_planning", value: true }),
+      );
+      await session.startTurn("Investigate a concern");
+      const turn = await appServer.waitForTurnStart();
+      expect(turn.input).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "text",
+            text: "The default focus of this conversation is discussion, investigation and OpenSpec planning. Implementation of agreed changes normally runs in a child agent, with decisions and follow-up continuing here.",
+          }),
+          expect.objectContaining({ type: "text", text: "Investigate a concern" }),
+        ]),
+      );
+      expect(turn.developerInstructions).toBe("Existing project guidance");
+      expect(turn.collaborationMode).not.toMatchObject({ mode: "plan" });
+    } finally {
+      await session.close();
+    }
+  });
+
+  test("enabling OpenSpec planning leaves native Plan mode and can be turned off", async () => {
+    const { session, appServer } = await createConnectedSession({
+      featureValues: { plan_mode: true },
+    });
+    try {
+      await session.setFeature?.("openspec_planning", true);
+      expect(session.features).toContainEqual(
+        expect.objectContaining({ id: "plan_mode", value: false }),
+      );
+      await session.setFeature?.("plan_mode", true);
+      expect(session.features).toContainEqual(
+        expect.objectContaining({ id: "openspec_planning", value: false }),
+      );
+      await session.setFeature?.("plan_mode", false);
+      await session.startTurn("Do the requested work");
+      const turn = await appServer.waitForTurnStart();
+      expect(turn.input).toEqual([
+        expect.objectContaining({ type: "text", text: "Do the requested work" }),
+      ]);
+    } finally {
+      await session.close();
+    }
+  });
+
   test("GPT-6.1 Sol offers catalog speed tiers and sends Ultrafast", async () => {
     const { session, appServer } = await createConnectedSession(
       { model: "gpt-6.1-sol" },
@@ -341,7 +392,10 @@ describe("Codex app-server provider features", () => {
       featureValues: { fast_mode: true },
     });
     try {
-      expect(session.features.map((feature) => feature.id)).toEqual(["plan_mode"]);
+      expect(session.features.map((feature) => feature.id)).toEqual([
+        "plan_mode",
+        "openspec_planning",
+      ]);
       await expect(session.setFeature?.("fast_mode", true)).rejects.toThrow(
         `Codex fast mode is not available for model '${model}'`,
       );
@@ -381,7 +435,7 @@ describe("Codex app-server provider features", () => {
   test("features returns speed selector and plan toggle when supported", async () => {
     const { session } = await createConnectedSession();
 
-    expect(session.features).toEqual([
+    expect(session.features.filter((feature) => feature.id !== "openspec_planning")).toEqual([
       speedFeature("default"),
       {
         type: "toggle",
@@ -397,7 +451,7 @@ describe("Codex app-server provider features", () => {
     await session.setFeature?.("service_tier", "priority");
     await session.setFeature?.("plan_mode", true);
 
-    expect(session.features).toEqual([
+    expect(session.features.filter((feature) => feature.id !== "openspec_planning")).toEqual([
       speedFeature("priority"),
       {
         type: "toggle",
@@ -414,7 +468,7 @@ describe("Codex app-server provider features", () => {
   test("features returns only plan toggle when model does not support fast mode", async () => {
     const { session } = await createConnectedSession({ model: "gpt-3.5-turbo" });
 
-    expect(session.features).toEqual([
+    expect(session.features.filter((feature) => feature.id !== "openspec_planning")).toEqual([
       {
         type: "toggle",
         id: "plan_mode",
@@ -433,7 +487,7 @@ describe("Codex app-server provider features", () => {
       featureValues: { fast_mode: true },
     });
 
-    expect(session.features).toEqual([
+    expect(session.features.filter((feature) => feature.id !== "openspec_planning")).toEqual([
       {
         type: "toggle",
         id: "plan_mode",
@@ -510,7 +564,7 @@ describe("Codex app-server provider features", () => {
       featureValues: { fast_mode: true, plan_mode: true },
     });
 
-    expect(session.features).toEqual([
+    expect(session.features.filter((feature) => feature.id !== "openspec_planning")).toEqual([
       speedFeature("priority"),
       {
         type: "toggle",
@@ -573,7 +627,7 @@ describe("Codex app-server provider features", () => {
     await session.setFeature?.("service_tier", "priority");
     await session.setModel("gpt-3.5-turbo");
 
-    expect(session.features).toEqual([
+    expect(session.features.filter((feature) => feature.id !== "openspec_planning")).toEqual([
       {
         type: "toggle",
         id: "plan_mode",
