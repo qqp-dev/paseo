@@ -32,6 +32,15 @@ export const CODEX_PLAN_MODE_FEATURE: Omit<AgentFeatureToggle, "value"> = {
   icon: "list-todo",
 };
 
+export const CODEX_OPENSPEC_PLANNING_FEATURE: Omit<AgentFeatureToggle, "value"> = {
+  type: "toggle",
+  id: "openspec_planning",
+  label: "OpenSpec planning",
+  description: "Plan here and apply agreed changes in a child agent",
+  tooltip: "Toggle OpenSpec planning preference",
+  icon: "list-todo",
+};
+
 function normalizeCodexModelId(modelId: string | null | undefined): string | null {
   const normalized = typeof modelId === "string" ? modelId.trim() : "";
   return normalized.length > 0 ? normalized : null;
@@ -50,6 +59,7 @@ export function buildCodexFeatures(input: {
   fastModeEnabled: boolean;
   planModeEnabled: boolean;
   planModeAvailable?: boolean;
+  openspecPlanningEnabled?: boolean;
 }): AgentFeature[] {
   const features: AgentFeature[] = [];
 
@@ -67,5 +77,9 @@ export function buildCodexFeatures(input: {
     });
   }
 
+  features.push({
+    ...CODEX_OPENSPEC_PLANNING_FEATURE,
+    value: input.openspecPlanningEnabled === true,
+  });
   return features;
 }

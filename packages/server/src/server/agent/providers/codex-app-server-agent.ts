@@ -73,6 +73,7 @@ import {
 import { createPathEquivalenceMatcher } from "../../../utils/path.js";
 import { spawnProcess } from "../../../utils/spawn.js";
 import { extractCodexTerminalSessionId, nonEmptyString } from "./tool-call-mapper-utils.js";
+import { OPENSPEC_PLANNING_PREFERENCE } from "./openspec-planning-preference.js";
 import { buildCodexFeatures, codexModelSupportsFastMode } from "./codex-feature-definitions.js";
 import {
   CodexAppServerClient,
@@ -3472,16 +3473,23 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.asyncQuestions = new CodexAsyncQuestions(resumeHandle?.metadata?.asyncQuestions);
     this.codexHome = deps.codexHome ?? resolveCodexHomeDir(process.env);
     this.config.thinkingOptionId = normalizeCodexThinkingOptionId(this.config.thinkingOptionId);
-    if (this.config.featureValues?.fast_mode && codexModelSupportsFastMode(this.config.model)) {
-      this.serviceTier = "fast";
-    }
-    if (this.config.featureValues?.plan_mode) {
-      this.planModeEnabled = true;
-    }
+    this.initializeFeatures();
 
     if (this.resumeHandle?.sessionId) {
       this.currentThreadId = this.resumeHandle.sessionId;
       this.historyPending = true;
+    }
+  }
+
+  private initializeFeatures(): void {
+    if (this.config.featureValues?.fast_mode && codexModelSupportsFastMode(this.config.model)) {
+      this.serviceTier = "fast";
+    }
+    if (this.config.featureValues?.openspec_planning === true) {
+      this.config.featureValues = { ...this.config.featureValues, plan_mode: false };
+    }
+    if (this.config.featureValues?.plan_mode) {
+      this.planModeEnabled = true;
     }
   }
 
@@ -3495,6 +3503,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       fastModeEnabled: this.serviceTier === "fast",
       planModeEnabled: this.planModeEnabled,
       planModeAvailable: this.hasPlanCollaborationMode(),
+      openspecPlanningEnabled: this.config.featureValues?.openspec_planning === true,
     });
   }
 
@@ -4079,6 +4088,9 @@ export class CodexAppServerAgentSession implements AgentSession {
     hasCodexConfig: boolean;
   }> {
     const input = await this.buildUserInput(prompt);
+    if (this.config.featureValues?.openspec_planning === true) {
+      input.unshift(toCodexTextInput(OPENSPEC_PLANNING_PREFERENCE));
+    }
     const preset = MODE_PRESETS[this.currentMode] ?? MODE_PRESETS[DEFAULT_CODEX_MODE_ID];
     const params: Record<string, unknown> = {
       threadId: this.currentThreadId,
@@ -4539,7 +4551,17 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.applyFeatureValue("fast_mode", Boolean(value));
       return;
     }
+    if (featureId === "openspec_planning") {
+      this.config.featureValues = {
+        ...this.config.featureValues,
+        openspec_planning: Boolean(value),
+      };
+      if (value) this.applyFeatureValue("plan_mode", false);
+      return;
+    }
     if (featureId === "plan_mode") {
+      if (value)
+        this.config.featureValues = { ...this.config.featureValues, openspec_planning: false };
       this.applyFeatureValue("plan_mode", Boolean(value));
       return;
     }

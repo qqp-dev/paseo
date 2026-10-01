@@ -1,4 +1,5 @@
 import type { Logger } from "pino";
+import { getParentAgentIdFromLabels } from "@getpaseo/protocol/agent-labels";
 
 import type { TerminalManager } from "../../../terminal/terminal-manager.js";
 import type { CreatePaseoWorktreeInput } from "../../paseo-worktree-service.js";
@@ -206,12 +207,15 @@ export async function createAgentCommand(
     initialPromptError = sendResult.error ?? null;
   }
 
-  if (input.kind === "mcp" && input.notifyOnFinish && input.callerAgentId && initialPromptStarted) {
+  const callerAgentId =
+    input.kind === "mcp" ? input.callerAgentId : getParentAgentIdFromLabels(input.labels);
+  const notifyOnFinish = input.kind !== "mcp" || input.notifyOnFinish;
+  if (notifyOnFinish && callerAgentId && initialPromptStarted) {
     setupFinishNotification({
       agentManager: dependencies.agentManager,
       agentStorage: dependencies.agentStorage,
       childAgentId: snapshot.id,
-      callerAgentId: input.callerAgentId,
+      callerAgentId,
       requireParentOwnership: true,
       logger: dependencies.logger,
     });

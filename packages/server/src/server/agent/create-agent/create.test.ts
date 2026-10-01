@@ -11,8 +11,58 @@ import { AgentStorage } from "../agent-storage.js";
 import type { CreatePaseoWorktreeWorkflowResult } from "../../worktree-session.js";
 import { createAgentCommand } from "./create.js";
 import type { ManagedAgent } from "../agent-manager.js";
+import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
 
 const logger = createTestLogger();
+
+test("session-created child returns its result to its parent", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "create-agent-child-notification-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const prompts: unknown[] = [];
+  const agentManager = new AgentManager({
+    clients: createTestAgentClients({ onStartTurn: (prompt) => prompts.push(prompt) }),
+    registry: storage,
+    logger,
+  });
+  try {
+    const parent = await agentManager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+      workspaceId: "ws-notification",
+    });
+    const { snapshot: child } = await createAgentCommand(
+      {
+        agentManager,
+        agentStorage: storage,
+        logger,
+        providerSnapshotManager: createProviderSnapshotManagerStub().manager,
+      },
+      {
+        kind: "session",
+        config: { provider: "codex", cwd: workdir },
+        workspaceId: "ws-notification",
+        initialPrompt: "Say done.",
+        labels: { [PARENT_AGENT_ID_LABEL]: parent.id },
+        provisionalTitle: null,
+        firstAgentContext: { attachments: [] },
+        buildSessionConfig: async (config) => ({ sessionConfig: config }),
+      },
+    );
+    await vi.waitFor(
+      () => {
+        expect(
+          prompts.some(
+            (prompt) =>
+              typeof prompt === "string" &&
+              prompt.includes(child.id) &&
+              prompt.includes("finished"),
+          ),
+        ).toBe(true);
+      },
+      { timeout: 10_000 },
+    );
+  } finally {
+    await removeRealAgentManagerWorkdir({ agentManager, storage, workdir });
+  }
+});
 
 function createRealAgentManager(storage: AgentStorage): AgentManager {
   return new AgentManager({
