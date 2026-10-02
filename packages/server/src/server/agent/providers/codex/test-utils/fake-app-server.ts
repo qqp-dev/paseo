@@ -138,6 +138,7 @@ export function createFakeCodexAppServer(
   const recordedRollbacks: JsonObject[] = [];
   const responseHandlers: Record<string, FakeCodexAppServerHandler> = {
     initialize: () => ({}),
+    "skills/extraRoots/set": () => ({}),
     "collaborationMode/list": () => ({ data: [] }),
     "config/read": () => ({ config: {} }),
     getUserSavedConfig: () => ({ config: {} }),
