@@ -71,11 +71,17 @@ test("OpenSpec preference plans here and uses the existing child track for imple
     const composer = composerLocator(page);
     const toggle = page.getByTestId("agent-feature-openspec_planning").filter({ visible: true });
     const popover = page.getByTestId("composer-autocomplete-popover");
+    const expectedSkillLabels = OPENSPEC_SKILL_NAMES.map((name) => `/${name}`);
     await expect(toggle).toBeVisible();
     await composer.fill("/openspec");
     await expect(popover.getByText(/^\/openspec-/)).toHaveCount(0);
     await toggle.click();
-    await expect(popover.getByText(/^\/openspec-/)).toHaveCount(6, { timeout: 60_000 });
+    await expect
+      .poll(
+        async () => [...new Set(await popover.getByText(/^\/openspec-/).allTextContents())].sort(),
+        { timeout: 60_000 },
+      )
+      .toEqual(expectedSkillLabels);
     await toggle.click();
     await expect(popover.getByText(/^\/openspec-/)).toHaveCount(0);
     expect(
@@ -84,7 +90,12 @@ test("OpenSpec preference plans here and uses the existing child track for imple
       ),
     ).toHaveLength(0);
     await toggle.click();
-    await expect(popover.getByText(/^\/openspec-/)).toHaveCount(6, { timeout: 60_000 });
+    await expect
+      .poll(
+        async () => [...new Set(await popover.getByText(/^\/openspec-/).allTextContents())].sort(),
+        { timeout: 60_000 },
+      )
+      .toEqual(expectedSkillLabels);
     await submitMessage(
       page,
       "Use openspec-propose to propose a tiny change named add-greeting: create greeting.txt containing exactly hello followed by a newline. This is a disposable synthetic acceptance project with a local bare remote. Keep the proposal concise.",
