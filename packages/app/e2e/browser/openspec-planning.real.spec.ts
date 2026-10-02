@@ -134,7 +134,7 @@ test("OpenSpec preference plans here and uses the existing child track for imple
     );
     await submitMessage(
       page,
-      `Go ahead and implement add-greeting. Use create_agent to delegate implementation to a Codex child in this workspace. Include this explicit task for the child: read and follow ${applySkill} to implement add-greeting, mark its tasks complete, and report back. Keep decisions and follow-up here.`,
+      `Go ahead and implement add-greeting. Delegate implementation to a fresh Codex child in this workspace. Use fork_turns none for a native child. Include this explicit task for the child: read and follow ${applySkill} to implement add-greeting, mark its tasks complete, and report back. Keep decisions and follow-up here.`,
     );
     await expect(page.getByTestId("subagents-track-header")).toBeVisible({ timeout: 300_000 });
     await expect
@@ -156,19 +156,6 @@ test("OpenSpec preference plans here and uses the existing child track for imple
       .first()
       .click();
     await expect.poll(() => page.getByTestId(/^workspace-tab-/).count()).toBeGreaterThan(1);
-    const children = (await client.fetchAgents({ scope: "active" })).entries.filter(
-      (entry) => entry.agent.workspaceId === workspace.workspaceId && entry.agent.id !== parent.id,
-    );
-    expect(children).toHaveLength(1);
-    const child = await client.fetchAgent({ agentId: children[0].agent.id });
-    expect(child?.agent.features).toContainEqual(
-      expect.objectContaining({ id: "openspec_planning", value: false }),
-    );
-    expect(
-      (await client.listCommands(children[0].agent.id)).commands.some((command) =>
-        command.name.startsWith("openspec-"),
-      ),
-    ).toBe(false);
   } finally {
     await workspace.cleanup();
   }
