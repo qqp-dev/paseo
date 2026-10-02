@@ -282,6 +282,7 @@ interface CodexAppServerAgentDeps {
   customCodexConfig?: CodexCustomProviderConfig | null;
   // The CODEX_HOME the session's app-server runs with; prompts and skills are read from it.
   codexHome?: string;
+  openspecSkillsRoot?: string;
   _createCodexClient?: (
     child: ChildProcessWithoutNullStreams,
     logger: Logger,
@@ -3648,6 +3649,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       );
       this.threadRollbackAvailable = codexServerHasThreadRollback(initialized?.userAgent);
       client.notify("initialized", {});
+      await this.configureOpenSpecSkills(client, this.config.featureValues);
 
       this.speedModels =
         CodexModelListResponseSchema.parse(await client.request("model/list", {})).data ?? [];
@@ -3768,12 +3770,28 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.refreshResolvedCollaborationMode();
   }
 
-  private async loadSkills(): Promise<void> {
-    if (!this.client) return;
+  private async configureOpenSpecSkills(
+    client: CodexAppServerClientLike,
+    featureValues: AgentSessionConfig["featureValues"],
+  ): Promise<void> {
+    const root =
+      this.deps.openspecSkillsRoot ??
+      path.join(os.homedir(), ".local", "share", "openspec", "skills");
+    const extraRoots = featureValues?.openspec_planning === true ? [root] : [];
+    await client.request("skills/extraRoots/set", { extraRoots });
+    this.cachedSkills = null;
+  }
+
+  private async loadSkills(
+    client: CodexAppServerClientLike | null = this.client,
+    options: { forceReload?: boolean } = {},
+  ): Promise<void> {
+    if (!client) return;
     try {
       const response = toObjectRecord(
-        await this.client.request("skills/list", {
+        await client.request("skills/list", {
           cwds: [this.config.cwd],
+          ...options,
         }),
       );
       const entries = Array.isArray(response?.data) ? response.data : [];
@@ -3979,6 +3997,8 @@ export class CodexAppServerAgentSession implements AgentSession {
     try {
       await client.request("initialize", buildCodexAppServerInitializeParams());
       client.notify("initialized", {});
+      await this.configureOpenSpecSkills(client, this.config.featureValues);
+      await this.loadSkills(client);
       await this.loadPersistedHistory(client);
     } finally {
       await client.dispose();
@@ -4670,20 +4690,25 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     if (featureId === "openspec_planning") {
-      this.config.featureValues = {
-        ...this.config.featureValues,
-        openspec_planning: Boolean(value),
-      };
+      await this.setOpenSpecPlanning({ enabled: Boolean(value) });
       if (value) this.applyFeatureValue("plan_mode", false);
       return;
     }
     if (featureId === "plan_mode") {
-      if (value)
-        this.config.featureValues = { ...this.config.featureValues, openspec_planning: false };
+      if (value) await this.setOpenSpecPlanning({ enabled: false });
       this.applyFeatureValue("plan_mode", Boolean(value));
       return;
     }
     throw new Error(`Unknown Codex feature: ${featureId}`);
+  }
+
+  private async setOpenSpecPlanning({ enabled }: { enabled: boolean }): Promise<void> {
+    const featureValues = { ...this.config.featureValues, openspec_planning: enabled };
+    if (this.client) {
+      await this.configureOpenSpecSkills(this.client, featureValues);
+    }
+    this.config.featureValues = featureValues;
+    await this.loadSkills(this.client, { forceReload: true });
   }
 
   getPendingPermissions(): AgentPermissionRequest[] {

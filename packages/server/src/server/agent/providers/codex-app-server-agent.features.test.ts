@@ -1,5 +1,6 @@
 import pino from "pino";
 import { describe, expect, test } from "vitest";
+import { z } from "zod";
 
 import type { AgentSession, AgentSessionConfig } from "../agent-sdk-types.js";
 import { CodexAppServerAgentSession } from "./codex-app-server-agent.js";
@@ -10,6 +11,35 @@ import {
 import { createTestLogger } from "../../../test-utils/test-logger.js";
 
 const CODEX_PROVIDER = "codex";
+const OPENSPEC_SKILLS_ROOT = "/tmp/shared-openspec-skills";
+const OPENSPEC_SKILL_NAMES = [
+  "openspec-apply-change",
+  "openspec-archive-change",
+  "openspec-explore",
+  "openspec-propose",
+  "openspec-sync-specs",
+  "openspec-update-change",
+];
+const OTHER_SKILL = {
+  name: "other-skill",
+  description: "An existing user skill",
+  path: "/tmp/user-skills/other-skill/SKILL.md",
+  enabled: true,
+};
+const OPENSPEC_SKILLS = OPENSPEC_SKILL_NAMES.map((name) => ({
+  name,
+  description: name,
+  path: `${OPENSPEC_SKILLS_ROOT}/${name}/SKILL.md`,
+  enabled: true,
+}));
+
+interface SessionHarnessOptions {
+  models?: unknown[];
+  logger?: pino.Logger;
+  resumePurpose?: "interactive" | "history";
+  resumeHandle?: { sessionId: string };
+  rejectSkillRoots?: boolean;
+}
 
 interface CollaborationModeRecord {
   name: string;
@@ -100,28 +130,46 @@ function createConfig(overrides: Partial<AgentSessionConfig> = {}): AgentSession
 
 function createSessionHarness(
   configOverrides: Partial<AgentSessionConfig> = {},
-  options: { logger?: pino.Logger; models?: unknown[] } = {},
+  options: SessionHarnessOptions = {},
 ): {
   session: CodexFeaturesTestSession;
   appServer: FakeCodexAppServer;
 } {
   const config = createConfig(configOverrides);
+  let openspecEnabled = false;
   const appServer = createFakeCodexAppServer({
     "collaborationMode/list": () => ({ data: TEST_COLLABORATION_MODES }),
     "model/list": () => ({ data: options.models ?? TEST_SPEED_MODELS }),
+    "skills/extraRoots/set": (params) => {
+      if (options.rejectSkillRoots) {
+        return { __jsonRpcError: { message: "Skill roots unavailable" } };
+      }
+      const { extraRoots } = z.object({ extraRoots: z.array(z.string()) }).parse(params);
+      openspecEnabled = extraRoots.includes(OPENSPEC_SKILLS_ROOT);
+      return {};
+    },
+    "skills/list": () => ({
+      data: [{ skills: openspecEnabled ? [OTHER_SKILL, ...OPENSPEC_SKILLS] : [OTHER_SKILL] }],
+    }),
   });
   const session = new CodexAppServerAgentSession(
     { ...config, provider: CODEX_PROVIDER },
-    null,
+    options.resumeHandle ?? null,
     options.logger ?? createTestLogger(),
     async () => appServer.child,
+    { openspecSkillsRoot: OPENSPEC_SKILLS_ROOT },
+    false,
+    false,
+    false,
+    undefined,
+    options.resumePurpose,
   ) as CodexFeaturesTestSession;
   return { session, appServer };
 }
 
 async function createConnectedSession(
   configOverrides: Partial<AgentSessionConfig> = {},
-  options: { logger?: pino.Logger; models?: unknown[] } = {},
+  options: SessionHarnessOptions = {},
 ): Promise<{
   session: CodexFeaturesTestSession;
   appServer: FakeCodexAppServer;
@@ -133,6 +181,101 @@ async function createConnectedSession(
 }
 
 describe("Codex app-server provider features", () => {
+  test("OpenSpec skills toggle per conversation before its first message", async () => {
+    const { session, appServer } = await createConnectedSession();
+    const other = await createConnectedSession();
+    try {
+      expect((await session.listCommands()).filter((command) => command.kind === "skill")).toEqual([
+        expect.objectContaining({ name: "other-skill" }),
+      ]);
+      await session.setFeature?.("openspec_planning", true);
+      const enabledCommands = await session.listCommands();
+      expect(
+        enabledCommands
+          .filter((command) => command.name.startsWith("openspec-"))
+          .map((command) => command.name),
+      ).toEqual(OPENSPEC_SKILL_NAMES);
+      expect(
+        (await other.session.listCommands()).some((command) =>
+          command.name.startsWith("openspec-"),
+        ),
+      ).toBe(false);
+      expect(appServer.requests().some((request) => request.method === "turn/start")).toBe(false);
+
+      await session.setFeature?.("openspec_planning", false);
+      expect((await session.listCommands()).filter((command) => command.kind === "skill")).toEqual([
+        expect.objectContaining({ name: "other-skill" }),
+      ]);
+      expect(
+        appServer
+          .requests()
+          .filter((request) => request.method === "skills/extraRoots/set")
+          .map((request) => request.params),
+      ).toEqual([{ extraRoots: [] }, { extraRoots: [OPENSPEC_SKILLS_ROOT] }, { extraRoots: [] }]);
+      expect(appServer.requests()).toContainEqual(
+        expect.objectContaining({
+          method: "skills/list",
+          params: { cwds: ["/tmp/codex-fast-mode-test"], forceReload: true },
+        }),
+      );
+      await session.startTurn("Ordinary work");
+      expect((await appServer.waitForTurnStart()).input).toEqual([
+        expect.objectContaining({ type: "text", text: "Ordinary work" }),
+      ]);
+    } finally {
+      await session.close();
+      await other.session.close();
+    }
+  });
+
+  test.each(["interactive", "history"] as const)(
+    "restores OpenSpec skills before %s thread loading",
+    async (resumePurpose) => {
+      const { session, appServer } = await createConnectedSession(
+        { featureValues: { openspec_planning: true } },
+        { resumeHandle: { sessionId: "restored-thread" }, resumePurpose },
+      );
+      try {
+        const requests = appServer.requests();
+        const rootsIndex = requests.findIndex(
+          (request) => request.method === "skills/extraRoots/set",
+        );
+        const metadataIndex = requests.findIndex((request) => request.method === "skills/list");
+        const threadMethod = resumePurpose === "history" ? "thread/read" : "thread/resume";
+        const threadIndex = requests.findIndex((request) => request.method === threadMethod);
+        expect(rootsIndex).toBeGreaterThan(-1);
+        expect(metadataIndex).toBeGreaterThan(rootsIndex);
+        expect(threadIndex).toBeGreaterThan(metadataIndex);
+        expect(
+          (await session.listCommands())
+            .filter((command) => command.name.startsWith("openspec-"))
+            .map((command) => command.name),
+        ).toEqual(OPENSPEC_SKILL_NAMES);
+      } finally {
+        await session.close();
+      }
+    },
+  );
+
+  test("skill-root failure leaves the requested preference disabled", async () => {
+    const options: SessionHarnessOptions = {};
+    const { session } = await createConnectedSession({}, options);
+    try {
+      options.rejectSkillRoots = true;
+      await expect(session.setFeature?.("openspec_planning", true)).rejects.toThrow(
+        "Skill roots unavailable",
+      );
+      expect(session.features).toContainEqual(
+        expect.objectContaining({ id: "openspec_planning", value: false }),
+      );
+      expect(
+        (await session.listCommands()).some((command) => command.name.startsWith("openspec-")),
+      ).toBe(false);
+    } finally {
+      await session.close();
+    }
+  });
+
   test("OpenSpec preference uses user context and ordinary mode without replacing instructions", async () => {
     const { session, appServer } = await createConnectedSession({
       featureValues: { openspec_planning: true, plan_mode: true },
