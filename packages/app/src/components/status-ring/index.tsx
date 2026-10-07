@@ -1,6 +1,8 @@
 import { memo } from "react";
 import { View } from "react-native";
-import Animated, { useAnimatedStyle } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useReducedMotion } from "react-native-reanimated";
+import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useAppVisible } from "@/hooks/use-app-visible";
 import {
   StatusRingFrame,
   type StatusRingProps,
@@ -17,7 +19,11 @@ import { useStatusRingRotation } from "@/components/status-ring/clock";
  * a Unistyles style on a Reanimated view crashes on theme change (docs/unistyles.md).
  */
 export const StatusRing = memo(function StatusRing({ backdrop }: StatusRingProps) {
-  const rotation = useStatusRingRotation();
+  const panelActive = useRetainedPanelActive();
+  const appVisible = useAppVisible();
+  const reduceMotion = useReducedMotion();
+  const active = panelActive && appVisible;
+  const rotation = useStatusRingRotation({ active, reduceMotion });
   const rotatorStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],
   }));
