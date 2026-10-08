@@ -51,6 +51,7 @@ import type {
   AgentPermissionResponse,
 } from "@getpaseo/protocol/agent-types";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
+import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { useSessionStore } from "@/stores/session-store";
 import { useRevealedText } from "@/hooks/use-revealed-text";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
@@ -943,11 +944,16 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         }),
       [client, pendingPermissionItems],
     );
+    const workingStatusBucket = deriveSidebarStateBucket({
+      status: context.status,
+      pendingPermissionCount: pendingPermissionItems.length,
+    });
     const turnFooterNode = useMemo(
       () =>
         isTurnActive || bottomTurnFooterHost ? (
           <TurnFooter
             isRunning={isTurnActive}
+            statusBucket={workingStatusBucket}
             inFlightTurnStartedAt={baseRenderModel.turnTiming.runningStartedAt}
             host={bottomTurnFooterHost}
             strategy={streamRenderStrategy}
@@ -961,6 +967,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         handleForkInFlightTurn,
         readOnly,
         isTurnActive,
+        workingStatusBucket,
         baseRenderModel.turnTiming.runningStartedAt,
         bottomTurnFooterHost,
         streamRenderStrategy,
