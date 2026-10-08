@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useMemo, type ReactNode } from "react";
 import { View } from "react-native";
+import { useReducedMotion } from "react-native-reanimated";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SPACING, type Theme } from "@/styles/theme";
 import type { TurnTiming } from "@/timeline/turn-time";
@@ -19,6 +20,10 @@ import type { TurnFooterHost } from "./layout";
 import { AssistantForkMenu } from "@/components/assistant-fork-menu";
 import { SyncedLoader } from "@/components/synced-loader";
 import { useRetainedPanelActive } from "@/components/retained-panel";
+import { STATUS_BUCKET_LABELS } from "@/hooks/sidebar-status-view-model";
+import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
+import { getStatusDotColor } from "@/utils/status-dot-color";
+import { STATUS_INDICATOR_FILLED_DOT_SIZE } from "@/utils/status-indicator-geometry";
 
 const ThemedSyncedLoader = withUnistyles(SyncedLoader);
 const workingIndicatorColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
@@ -43,6 +48,7 @@ export type InFlightTurnForkHandler = (target: AssistantForkTarget) => Promise<v
 
 export const TurnFooter = memo(function TurnFooter({
   isRunning,
+  statusBucket,
   inFlightTurnStartedAt,
   host,
   strategy,
@@ -51,6 +57,7 @@ export const TurnFooter = memo(function TurnFooter({
   onForkInFlightTurn,
 }: {
   isRunning: boolean;
+  statusBucket: SidebarStateBucket;
   inFlightTurnStartedAt: Date | null;
   host: TurnFooterHost | null;
   strategy: TurnContentStrategy;
@@ -62,6 +69,7 @@ export const TurnFooter = memo(function TurnFooter({
     return (
       <TurnFooterRow>
         <RunningTurnFooter
+          statusBucket={statusBucket}
           inFlightTurnStartedAt={inFlightTurnStartedAt}
           onForkInFlightTurn={onForkInFlightTurn}
         />
@@ -113,17 +121,31 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
 });
 
 const WorkingIndicator = memo(function WorkingIndicator({
+  statusBucket,
   inFlightTurnStartedAt = null,
   onForkInFlightTurn,
 }: {
+  statusBucket: SidebarStateBucket;
   inFlightTurnStartedAt?: Date | null;
   onForkInFlightTurn?: InFlightTurnForkHandler;
 }) {
   const active = useRetainedPanelActive();
+  const reduceMotion = useReducedMotion();
   return (
     <View style={stylesheet.turnFooterContent}>
       <View style={stylesheet.workingLoader}>
-        <ThemedSyncedLoader size={14} uniProps={workingIndicatorColorMapping} />
+        {reduceMotion ? (
+          <View style={stylesheet.staticWorkingIndicator}>
+            <View
+              accessible
+              accessibilityLabel={STATUS_BUCKET_LABELS[statusBucket]}
+              style={stylesheet.staticWorkingMark(statusBucket)}
+              testID="turn-working-status-mark"
+            />
+          </View>
+        ) : (
+          <ThemedSyncedLoader size={14} uniProps={workingIndicatorColorMapping} />
+        )}
       </View>
       {/* Match the completed-turn footer: actions precede timing metadata. */}
       {onForkInFlightTurn ? <AssistantForkMenu onFork={onForkInFlightTurn} /> : null}
@@ -140,15 +162,18 @@ const WorkingIndicator = memo(function WorkingIndicator({
 });
 
 function RunningTurnFooter({
+  statusBucket,
   inFlightTurnStartedAt,
   onForkInFlightTurn,
 }: {
+  statusBucket: SidebarStateBucket;
   inFlightTurnStartedAt: Date | null;
   onForkInFlightTurn?: InFlightTurnForkHandler;
 }) {
   return (
     <View style={stylesheet.turnFooterSlot} testID="turn-working-indicator">
       <WorkingIndicator
+        statusBucket={statusBucket}
         inFlightTurnStartedAt={inFlightTurnStartedAt}
         onForkInFlightTurn={onForkInFlightTurn}
       />
@@ -243,4 +268,18 @@ const stylesheet = StyleSheet.create((theme) => ({
   workingLoader: {
     marginLeft: -2,
   },
+  staticWorkingIndicator: {
+    width: 14,
+    height: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  staticWorkingMark: (bucket: SidebarStateBucket) => ({
+    width: STATUS_INDICATOR_FILLED_DOT_SIZE,
+    height: STATUS_INDICATOR_FILLED_DOT_SIZE,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor:
+      getStatusDotColor({ theme, bucket, showDoneAsInactive: true }) ??
+      theme.colors.foregroundMuted,
+  }),
 }));

@@ -23,7 +23,7 @@ export interface StatusRingProps {
 
 /**
  * The static half of the running indicator: the knockout, the track, and the centre dot. The
- * platform entry points supply the rotating quarter and own only how it is driven.
+ * platform entry points supply the running outline or rotating quarter and own how it is driven.
  *
  * The ring has no colour prop. It only ever means one thing — an agent is running — so it reads
  * that one colour out of the theme itself. Passing the colour in would materialise it at the call
@@ -103,6 +103,13 @@ export const styles = StyleSheet.create((theme) => {
       position: "absolute",
       borderColor: runningColor,
       opacity: STATUS_RING_TRACK_OPACITY,
+    },
+
+    staticRing: {
+      ...circle,
+      position: "absolute",
+      borderColor: runningColor,
+      opacity: STATUS_RING_HEAD_OPACITY,
     },
 
     // The moving quarter. Three sides transparent leaves the top border alone, which on a fully

@@ -30,9 +30,13 @@ export const StatusRing = memo(function StatusRing({ backdrop }: StatusRingProps
 
   return (
     <StatusRingFrame backdrop={backdrop}>
-      <Animated.View style={[rotatorStyles.rotator, rotatorStyle]}>
-        <View style={styles.arc} />
-      </Animated.View>
+      {reduceMotion ? (
+        <View style={styles.staticRing} />
+      ) : (
+        <Animated.View style={[rotatorStyles.rotator, rotatorStyle]}>
+          <View style={styles.arc} />
+        </Animated.View>
+      )}
     </StatusRingFrame>
   );
 });
