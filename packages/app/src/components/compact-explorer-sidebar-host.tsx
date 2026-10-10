@@ -22,6 +22,7 @@ import {
   type CompactExplorerSidebarHostModel,
 } from "@/components/compact-explorer-sidebar-host-state";
 import { AppearanceStyleBoundary } from "@/components/appearance-style-boundary";
+import { CoveredStreamPresentationProvider } from "@/agent-stream/covered-presentation";
 
 interface CompactExplorerOpenGestureSurfaceProps {
   children: ReactNode;
@@ -109,9 +110,17 @@ export function CompactExplorerSidebarHost({
   presentation,
 }: CompactExplorerSidebarHostProps) {
   const model = useActiveCompactExplorerSidebarModel(enabled);
+  const isCenterActive = useIsMobilePanelActive("agent");
+  const streamPresentationCovered =
+    !isWeb && enabled && presentation === "overlay" && !isCenterActive;
+  const centerContent = (
+    <CoveredStreamPresentationProvider covered={streamPresentationCovered}>
+      {children}
+    </CoveredStreamPresentationProvider>
+  );
   const [containerWidth, setContainerWidth] = useState(0);
   const openCompactFileExplorer = usePanelStore((state) => state.openCompactFileExplorer);
-  const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
+  const dismissMobilePanel = usePanelStore((state) => state.dismissMobilePanel);
   const openTab = useWorkspaceLayoutStore((state) => state.openTab);
   const openWorkspaceTabInFocusedPane = useCallback(
     (workspaceKey: string, target: WorkspaceTabTarget) =>
@@ -140,12 +149,12 @@ export function CompactExplorerSidebarHost({
         filePath,
         persistenceKey: model.persistenceKey,
         closeExplorerAfterOpen: presentation === "overlay",
-        showMobileAgent,
+        showMobileAgent: dismissMobilePanel,
         openWorkspaceTabInFocusedPane,
         focusWorkspaceTab,
       });
     },
-    [focusWorkspaceTab, model, openWorkspaceTabInFocusedPane, presentation, showMobileAgent],
+    [dismissMobilePanel, focusWorkspaceTab, model, openWorkspaceTabInFocusedPane, presentation],
   );
 
   const handleContainerLayout = useCallback((event: LayoutChangeEvent) => {
@@ -186,7 +195,7 @@ export function CompactExplorerSidebarHost({
   if (presentation === "dock") {
     return (
       <View style={styles.row} onLayout={handleContainerLayout}>
-        <View style={styles.fill}>{children}</View>
+        <View style={styles.fill}>{centerContent}</View>
         {themedExplorer}
       </View>
     );
@@ -198,7 +207,7 @@ export function CompactExplorerSidebarHost({
         enabled={enabled && Boolean(model?.workspaceRoot)}
         onOpenExplorer={handleOpenExplorer}
       >
-        {children}
+        {centerContent}
       </CompactExplorerOpenGestureSurface>
       {themedExplorer}
     </>

@@ -8,6 +8,7 @@ import {
   buildOpenFileExplorerPatch,
   buildToggleFileExplorerPatch,
   DEFAULT_TREE_RAIL_WIDTH,
+  dismissMobilePanelSelection,
   migratePanelState,
   selectIsAgentListOpen,
   selectIsCompactFileExplorerOpen,
@@ -167,6 +168,17 @@ describe("panel-store visibility selectors", () => {
     expect(setMobilePanelTarget(initial, "agent")).toBe(initial);
     expect(setMobilePanelTarget(initial, "agent-list")).toEqual({
       target: "agent-list",
+      revision: 5,
+    });
+  });
+
+  it("lets an explicit dismissal interrupt a queued open while the durable target is center", () => {
+    expect(dismissMobilePanelSelection({ target: "agent", revision: 4 })).toEqual({
+      target: "agent",
+      revision: 5,
+    });
+    expect(dismissMobilePanelSelection({ target: "agent-list", revision: 4 })).toEqual({
+      target: "agent",
       revision: 5,
     });
   });

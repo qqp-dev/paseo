@@ -1,5 +1,6 @@
 import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
 import type { AgentStreamEventPayload } from "@getpaseo/protocol/messages";
+import type { DaemonClientTrace } from "@getpaseo/client/internal/daemon-client";
 import { selectAgentTimelineState, useSessionStore } from "@/stores/session-store";
 import type { AssistantMessageItem, StreamItem, TodoEntry } from "@/types/stream";
 import type { TurnLivenessTransition } from "@/timeline/turn-liveness";
@@ -1470,6 +1471,7 @@ export interface AgentStreamReducerQueue {
 }
 
 export interface CreateAgentStreamReducerQueueInput {
+  trace?: DaemonClientTrace;
   getSnapshot: (agentId: string) => AgentStreamReducerSnapshot;
   commit: (
     agentId: string,
@@ -1737,21 +1739,41 @@ export function createAgentStreamReducerQueue(
       cancelScheduledFlush();
     }
 
-    const result = processAgentStreamEvents({
-      events,
-      ...input.getSnapshot(agentId),
+    const snapshot = input.getSnapshot(agentId);
+    const trace = input.trace?.isEnabled() ? input.trace : undefined;
+    trace?.beginSection("paseo.stream.flush.agent", {
+      events: String(events.length),
+      tail: String(snapshot.currentTail.length),
+      head: String(snapshot.currentHead.length),
     });
-
-    input.commit(agentId, result, events);
-    if (result.sideEffects.length > 0) {
-      input.handleSideEffects(agentId, result.sideEffects);
+    try {
+      const result = processAgentStreamEvents({ events, ...snapshot });
+      input.commit(agentId, result, events);
+      if (result.sideEffects.length > 0) {
+        input.handleSideEffects(agentId, result.sideEffects);
+      }
+    } finally {
+      trace?.endSection();
     }
   };
 
   const flush = () => {
     const agentIds = Array.from(pendingByAgentId.keys());
-    for (const agentId of agentIds) {
-      flushAgent(agentId);
+    const trace = input.trace?.isEnabled() ? input.trace : undefined;
+    if (trace) {
+      let eventCount = 0;
+      for (const agentId of agentIds) eventCount += pendingByAgentId.get(agentId)?.length ?? 0;
+      trace.beginSection("paseo.stream.flush", {
+        agents: String(agentIds.length),
+        events: String(eventCount),
+      });
+    }
+    try {
+      for (const agentId of agentIds) {
+        flushAgent(agentId);
+      }
+    } finally {
+      trace?.endSection();
     }
   };
 
@@ -1817,6 +1839,7 @@ export function deriveAgentStreamTurnLiveness(
 }
 
 export interface CreateSessionAgentStreamReducerQueueInput {
+  trace?: DaemonClientTrace;
   serverId: string;
   setAgentStreamState: (serverId: string, agentId: string, state: StreamStatePatch) => void;
   setAgentTimelineCursor: (
@@ -1882,6 +1905,7 @@ export function createSessionAgentStreamReducerQueue(
     input;
 
   return createAgentStreamReducerQueue({
+    trace: input.trace,
     getSnapshot: (agentId) => {
       const session = useSessionStore.getState().sessions[serverId];
       const timeline = selectAgentTimelineState(session, agentId);

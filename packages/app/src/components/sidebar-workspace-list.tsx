@@ -96,6 +96,7 @@ import {
   SidebarWorkspaceMenu,
 } from "@/components/sidebar/sidebar-workspace-menu";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
+import { traceMobilePanelControl } from "@/mobile-panels/trace";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
@@ -1099,6 +1100,7 @@ function WorkspaceRowInner({
   }, [interaction.didLongPressRef, onPress]);
   const handleWorkspacePressIn = useCallback(
     (event: GestureResponderEvent) => {
+      traceMobilePanelControl("workspace-row", "press-in", event);
       setIsPressed(true);
       interaction.handlePressIn(event);
     },
@@ -1409,6 +1411,7 @@ function WorkspaceRowItem({
     if (!workspace.serverId) {
       return;
     }
+    traceMobilePanelControl("workspace-row", "press");
     onWorkspacePress?.();
     navigateToWorkspace({ serverId: workspace.serverId, workspaceId: workspace.workspaceId });
   }, [onWorkspacePress, workspace.serverId, workspace.workspaceId]);

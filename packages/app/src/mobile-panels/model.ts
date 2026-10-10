@@ -7,6 +7,7 @@ interface MobilePanelGesture {
 export interface MobilePanelMotionState extends MobilePanelSelection {
   gesture: MobilePanelGesture | null;
   motionTarget: MobilePanelView;
+  settledRevision: number;
   settledTarget: MobilePanelView;
 }
 
@@ -39,11 +40,13 @@ function settleMobilePanelAtPosition(
   "worklet";
   const isCanonicalMotion = state.target === state.motionTarget;
   const isAtTarget = Math.abs(position - getMobilePanelAnchor(state.target)) <= 0.002;
-  if (state.gesture || !isCanonicalMotion || !isAtTarget || state.settledTarget === state.target) {
+  const isCurrentSettlement =
+    state.settledTarget === state.target && state.settledRevision === state.revision;
+  if (state.gesture || !isCanonicalMotion || !isAtTarget || isCurrentSettlement) {
     return { state };
   }
   return {
-    state: { ...state, settledTarget: state.target },
+    state: { ...state, settledTarget: state.target, settledRevision: state.revision },
   };
 }
 
@@ -65,6 +68,7 @@ export function createMobilePanelMotionState(
     ...selection,
     gesture: null,
     motionTarget: selection.target,
+    settledRevision: selection.revision,
     settledTarget: selection.target,
   };
 }

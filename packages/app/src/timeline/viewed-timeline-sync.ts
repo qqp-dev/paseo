@@ -12,6 +12,7 @@ import {
 } from "@/stores/session-store";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import type { SessionOutboundMessage } from "@getpaseo/protocol/messages";
+import type { DaemonClientTrace } from "@getpaseo/client/internal/daemon-client";
 import { getSendingClientMessageIds } from "@/composer/submission/model";
 import {
   getInitDeferred,
@@ -358,6 +359,7 @@ export interface ViewedTimelineOwner extends ViewedTimelineSync {
 }
 
 export function createViewedTimelineOwner(input: {
+  trace?: DaemonClientTrace;
   serverId: string;
   replica: TimelineReplica;
   replaceDemandedAgentIds: (agentIds: string[]) => void;
@@ -382,6 +384,7 @@ export function createViewedTimelineOwner(input: {
       useCreateFlowStore.getState().clearByAgent({ serverId: input.serverId, agentId }),
   });
   const streamQueue = createSessionAgentStreamReducerQueue({
+    trace: input.trace,
     serverId: input.serverId,
     setAgentStreamState: (...args) => useSessionStore.getState().setAgentStreamState(...args),
     setAgentTimelineCursor: (...args) => useSessionStore.getState().setAgentTimelineCursor(...args),

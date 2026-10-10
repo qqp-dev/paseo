@@ -105,6 +105,7 @@ import { isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 import { recordRenderProfileReasons } from "@/utils/render-profiler";
 import { useRetainedPanelActive } from "@/components/retained-panel";
+import { AgentStreamPresentationActivity } from "./covered-presentation";
 import { useStreamHistoryWindow } from "./use-stream-history-window";
 import { PluginTimelineItemView, useInstalledTimelineTransform } from "@/plugins/timeline";
 
@@ -1288,7 +1289,21 @@ function agentStreamViewPropsEqual(
   return reasons.length === 0;
 }
 
-export const AgentStreamView = memo(AgentStreamViewComponent, agentStreamViewPropsEqual);
+const AgentStreamViewWithPresentationActivity = forwardRef<
+  AgentStreamViewHandle,
+  AgentStreamViewProps
+>(function AgentStreamViewWithPresentationActivity(props, ref) {
+  return (
+    <AgentStreamPresentationActivity>
+      <AgentStreamViewComponent {...props} ref={ref} />
+    </AgentStreamPresentationActivity>
+  );
+});
+
+export const AgentStreamView = memo(
+  AgentStreamViewWithPresentationActivity,
+  agentStreamViewPropsEqual,
+);
 AgentStreamView.displayName = "AgentStreamView";
 
 interface ToolCallSlotProps extends Omit<

@@ -20,7 +20,10 @@ interface MobilePanelSelection {
 }
 ```
 
-Every semantic target change increments `revision`. Repeating the current target is idempotent.
+Every semantic target change increments `revision`. Repeating a programmatic target is idempotent.
+Explicit overlay dismissals use `dismissMobilePanel`, which advances the revision even when the
+durable target is already `agent`. The visible drawer may have finished an opening gesture while its
+semantic command is still queued on RN; a Close tap or workspace selection must supersede that command.
 Compact panel selection is not persisted; a cold start begins at `agent`.
 
 The UI worklet owns transient motion:
@@ -29,11 +32,15 @@ The UI worklet owns transient motion:
 - the current motion target
 - the active gesture's starting revision
 - the last settled target
+- the last settled revision
 
 React publishes the active panel only when the canonical target and the UI-thread position agree at
 the final anchor. Retained content never observes gesture previews, progress, or an unsettled target.
 The gesture hosts stay mounted. Native worklets own overlay opacity and pointer events while
-React owns settled panel activity and accessibility. Keep hidden native overlays laid out: collapsing
+React owns settled panel activity and accessibility. Native backdrop and panel children inherit the
+animated overlay's position-based input gate; they must not wait for React's settled activity to accept
+the visible panel's first tap. Web overlays continue to use React's settled input policy.
+Keep hidden native overlays laid out: collapsing
 their scroll ranges makes Android spring retained offsets back to zero during touch cancellation or
 release. Native panel hosts and their dependent draggable lists
 also retain identity across appearance hydration and settings changes. Do not wrap those hosts in
@@ -65,6 +72,14 @@ Canceled gestures return to the latest canonical target. A successful gesture st
 motion immediately; the matching React command adopts that motion instead of restarting it. Position
 settlement and command acceptance may arrive in either order. Activity changes after both agree on
 the same target.
+
+Input ownership follows native visibility independently of retained presentation activity. An explicit
+dismissal publishes a newer semantic revision before navigation, so any queued older gesture commit
+or activity publication is rejected. It never writes the UI position directly or changes the settled
+activity contract.
+Settlement publishes once at the canonical anchor for each accepted revision, including a newer
+same-target dismissal. Otherwise that dismissal could invalidate an already-queued publication
+without giving React a current replacement. Repeated position frames publish nothing.
 
 Manual gesture arbitration has two phases:
 
@@ -126,3 +141,15 @@ definition, no longer eligible to begin.
 `packages/app/src/mobile-panels/model.test.ts` exercises command, drag, cancellation, interruption,
 rapid-command, position-settlement, and width-projection sequences through the transition model. Add
 a sequence there whenever ownership or ordering changes.
+
+Profile builds emit bounded `paseo.panel.*` markers for anchor arrival, semantic commit, command,
+active publication, rendered input policy, and Close/workspace-row/Explorer handling. Anchor `ui`
+uses UI-thread `Date.now()` and `delay` records RN scheduling delay; control `eventTimestamp` is a
+separate native event clock and needs alignment before a latency comparison. React layout-effect
+markers do not establish when Fabric applied the native props.
+
+`paseo.provider.ingest` measures post-parse provider updates including synchronous store listeners.
+`paseo.stream.flush` measures a queued main-stream flush, with nested `.agent` reducer/commit spans.
+They carry enums and counts, without content or IDs. Queue wait, JSON decoding and later React/Fabric
+work are outside these spans. Provider ingestion is nested in inbound transport dispatch; the agent
+spans are nested in the whole flush. Do not sum overlapping spans.
