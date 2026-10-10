@@ -30,10 +30,10 @@ export function traceMobilePanelAnchor(
   if (!isProfileBuild) return;
   traceInstant("paseo.panel.anchor", {
     target,
-    motionTarget,
-    settledTarget,
-    revision: String(revision),
-    uiTimestamp: String(uiTimestamp),
-    schedulingDelayMs: String(Math.max(0, Date.now() - uiTimestamp)),
+    motion: motionTarget,
+    settled: settledTarget,
+    rev: String(revision),
+    ui: String(uiTimestamp),
+    delay: String(Math.max(0, Date.now() - uiTimestamp)),
   });
 }
