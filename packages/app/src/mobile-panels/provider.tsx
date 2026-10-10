@@ -22,6 +22,9 @@ import {
 } from "react-native-reanimated";
 import { scheduleOnRN, scheduleOnUI } from "react-native-worklets";
 import { isNative } from "@/constants/platform";
+import { isProfileBuild } from "@/constants/build-profile";
+import { traceInstant } from "@/performance/native-trace";
+import { traceMobilePanelAnchor } from "./trace";
 import {
   usePanelStore,
   type MobilePanelSelection,
@@ -96,7 +99,17 @@ export function MobilePanelsProvider({ children }: { children: ReactNode }) {
 
   const publishActivePanel = useCallback((panel: MobilePanelView, revision: number) => {
     const selection = usePanelStore.getState().mobilePanel;
-    if (selection.revision !== revision || selection.target !== panel) {
+    const accepted = selection.revision === revision && selection.target === panel;
+    if (isProfileBuild) {
+      traceInstant("paseo.panel.publish", {
+        panel,
+        revision: String(revision),
+        accepted: String(accepted),
+        currentTarget: selection.target,
+        currentRevision: String(selection.revision),
+      });
+    }
+    if (!accepted) {
       return;
     }
     if (isNative && panel !== "agent") {
@@ -105,9 +118,33 @@ export function MobilePanelsProvider({ children }: { children: ReactNode }) {
     setActivePanel(panel);
   }, []);
 
+  useLayoutEffect(() => {
+    if (isProfileBuild) traceInstant("paseo.panel.active.render", { panel: activePanel });
+  }, [activePanel]);
+
   useAnimatedReaction(
     () => ({ motionState: motionState.value, position: position.value }),
-    ({ motionState: currentState, position: currentPosition }) => {
+    ({ motionState: currentState, position: currentPosition }, previous) => {
+      if (isProfileBuild) {
+        const isAtAnchor =
+          Math.abs(currentPosition - getMobilePanelAnchor(currentState.motionTarget)) <= 0.002;
+        const wasAtSameAnchor =
+          previous &&
+          previous.motionState.target === currentState.target &&
+          previous.motionState.motionTarget === currentState.motionTarget &&
+          previous.motionState.revision === currentState.revision &&
+          Math.abs(previous.position - getMobilePanelAnchor(currentState.motionTarget)) <= 0.002;
+        if (isAtAnchor && !wasAtSameAnchor) {
+          scheduleOnRN(
+            traceMobilePanelAnchor,
+            currentState.target,
+            currentState.motionTarget,
+            currentState.settledTarget,
+            currentState.revision,
+            Date.now(),
+          );
+        }
+      }
       const settled = transitionMobilePanel(currentState, {
         type: "position.changed",
         position: currentPosition,
@@ -158,6 +195,12 @@ export function MobilePanelsProvider({ children }: { children: ReactNode }) {
       const selection = state.mobilePanel;
       if (selection === previousState.mobilePanel) {
         return;
+      }
+      if (isProfileBuild) {
+        traceInstant("paseo.panel.command", {
+          target: selection.target,
+          revision: String(selection.revision),
+        });
       }
       scheduleOnUI(applySelection, selection);
     });

@@ -8,6 +8,7 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type GestureResponderEvent,
 } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
@@ -51,6 +52,8 @@ import { usePanelStore } from "@/stores/panel-store";
 import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop-window";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
+import { traceMobilePanelControl } from "@/mobile-panels/trace";
+import { isProfileBuild } from "@/constants/build-profile";
 import { buildSettingsAddHostRoute, buildSettingsRoute } from "@/utils/host-routes";
 import { openHostOverview } from "@/navigation/settings-navigation";
 import {
@@ -66,6 +69,8 @@ import { SidebarWorkspaceList } from "./sidebar-workspace-list";
 type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
 
 const DEV_BUILD_LABEL = process.env.EXPO_PUBLIC_PASEO_DEV_BUILD_LABEL?.trim() || null;
+const traceClosePressIn = (event: GestureResponderEvent) =>
+  traceMobilePanelControl("close", "press-in", event);
 
 interface SidebarSharedProps {
   theme: SidebarTheme;
@@ -538,6 +543,13 @@ function MobileSidebar({
 }: MobileSidebarProps) {
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
+  const handleClosePress = useCallback(
+    (event: GestureResponderEvent) => {
+      traceMobilePanelControl("close", "press", event);
+      closeSidebar();
+    },
+    [closeSidebar],
+  );
 
   const handleWorkspacePress = useCallback(() => {
     closeSidebar();
@@ -568,7 +580,8 @@ function MobileSidebar({
         >
           <Pressable
             style={styles.mobileCloseButton}
-            onPress={closeSidebar}
+            onPressIn={isProfileBuild ? traceClosePressIn : undefined}
+            onPress={isProfileBuild ? handleClosePress : closeSidebar}
             testID="sidebar-close"
             nativeID="sidebar-close"
             accessible

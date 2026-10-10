@@ -3,8 +3,10 @@ import { Gesture } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { isWeb } from "@/constants/platform";
+import { isProfileBuild } from "@/constants/build-profile";
+import { traceInstant } from "@/performance/native-trace";
 import { useHorizontalScrollOptional } from "@/contexts/horizontal-scroll-context";
-import { usePanelStore } from "@/stores/panel-store";
+import { usePanelStore, type MobilePanelView } from "@/stores/panel-store";
 import { canBeginMobilePanelGesture, isMobilePanelGestureCurrent } from "./model";
 import { useMobilePanelsRuntime } from "./provider";
 import { resolveMobilePanelGestureIntent } from "./gesture-intent";
@@ -23,14 +25,25 @@ function useGestureState() {
   };
 }
 
-function useRevisionCommit(action: () => void) {
+function useRevisionCommit(action: () => void, target: MobilePanelView) {
   return useCallback(
     (revision: number) => {
-      if (isCurrentSelection(revision)) {
+      const accepted = isCurrentSelection(revision);
+      if (isProfileBuild) {
+        const selection = usePanelStore.getState().mobilePanel;
+        traceInstant("paseo.panel.gesture.commit", {
+          target,
+          revision: String(revision),
+          accepted: String(accepted),
+          currentTarget: selection.target,
+          currentRevision: String(selection.revision),
+        });
+      }
+      if (accepted) {
         action();
       }
     },
-    [action],
+    [action, target],
   );
 }
 
@@ -48,7 +61,7 @@ export function useOpenAgentListGesture(enabled: boolean) {
   const horizontalScroll = useHorizontalScrollOptional();
   const { startedRevision, touchStartX, touchStartY } = useGestureState();
   const showMobileAgentList = usePanelStore((state) => state.showMobileAgentList);
-  const commit = useRevisionCommit(showMobileAgentList);
+  const commit = useRevisionCommit(showMobileAgentList, "agent-list");
 
   return useMemo(
     () =>
@@ -142,7 +155,7 @@ export function useCloseAgentListGesture() {
   } = useMobilePanelsRuntime();
   const { startedRevision, touchStartX, touchStartY } = useGestureState();
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
-  const commit = useRevisionCommit(showMobileAgent);
+  const commit = useRevisionCommit(showMobileAgent, "agent");
 
   const gesture = useMemo(
     () =>
@@ -240,7 +253,7 @@ export function useOpenFileExplorerGesture({ enabled, onOpen }: OpenFileExplorer
     windowWidth,
   } = useMobilePanelsRuntime();
   const { startedRevision, touchStartX, touchStartY } = useGestureState();
-  const commit = useRevisionCommit(onOpen);
+  const commit = useRevisionCommit(onOpen, "file-explorer");
 
   return useMemo(
     () =>
@@ -337,7 +350,7 @@ export function useCloseFileExplorerGesture() {
   const { startedRevision, touchStartX, touchStartY } = useGestureState();
   const horizontalScroll = useHorizontalScrollOptional();
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
-  const commit = useRevisionCommit(showMobileAgent);
+  const commit = useRevisionCommit(showMobileAgent, "agent");
 
   const gesture = useMemo(
     () =>

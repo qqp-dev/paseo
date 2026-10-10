@@ -1,5 +1,6 @@
 import { PanelRight } from "lucide-react-native";
-import { type StyleProp, type ViewStyle } from "react-native";
+import { useCallback } from "react";
+import { type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 import { withUnistyles } from "react-native-unistyles";
 import { HeaderToggleButton } from "@/components/headers/header-toggle-button";
 import {
@@ -8,8 +9,12 @@ import {
   mutedIconColorMapping,
 } from "@/components/ui/icon-button-chrome";
 import type { ShortcutKey } from "@/utils/format-shortcut";
+import { traceMobilePanelControl } from "@/mobile-panels/trace";
+import { isProfileBuild } from "@/constants/build-profile";
 
 const ThemedPanelRight = withUnistyles(PanelRight);
+const traceExplorerPressIn = (event: GestureResponderEvent) =>
+  traceMobilePanelControl("explorer", "press-in", event);
 
 interface WorkspaceExplorerToggleProps {
   onPress: () => void;
@@ -43,10 +48,18 @@ export function WorkspaceExplorerToggle({
   mobile,
   style,
 }: WorkspaceExplorerToggleProps) {
+  const handlePress = useCallback(
+    (event: GestureResponderEvent) => {
+      traceMobilePanelControl("explorer", "press", event);
+      onPress();
+    },
+    [onPress],
+  );
   return (
     <HeaderToggleButton
       testID="workspace-explorer-toggle"
-      onPress={onPress}
+      onPressIn={isProfileBuild && mobile ? traceExplorerPressIn : undefined}
+      onPress={isProfileBuild && mobile ? handlePress : onPress}
       tooltipLabel={tooltipLabel}
       tooltipKeys={tooltipKeys}
       tooltipSide="left"

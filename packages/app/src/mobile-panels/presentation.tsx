@@ -1,8 +1,10 @@
-import { useMemo, type ComponentProps, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, type ComponentProps, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { GestureDetector, type GestureType } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { isWeb } from "@/constants/platform";
+import { isProfileBuild } from "@/constants/build-profile";
+import { traceInstant } from "@/performance/native-trace";
 import { WindowChromeRootRegion } from "@/utils/desktop-window";
 import { usePanelStore, type MobilePanelView } from "@/stores/panel-store";
 import { getMobilePanelFrame } from "./model";
@@ -27,6 +29,15 @@ export function MobilePanelOverlay({
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
   const isOpen = useIsMobilePanelActive(panel);
   const isLeft = panel === "agent-list";
+
+  useLayoutEffect(() => {
+    if (!isProfileBuild) return;
+    traceInstant("paseo.panel.input.render", {
+      panel,
+      pointerEvents: isOpen ? "auto" : "none",
+      accessibilityHidden: String(!isOpen),
+    });
+  }, [isOpen, panel]);
 
   const sidebarAnimatedStyle = useAnimatedStyle(() => {
     const frame = getMobilePanelFrame(position.value, windowWidth);
