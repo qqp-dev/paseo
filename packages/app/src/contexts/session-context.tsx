@@ -50,7 +50,8 @@ import { useToast } from "@/contexts/toast-context";
 import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import { applyCheckoutStatusUpdateFromEvent } from "@/git/checkout-status-cache";
-import { useProviderSubagentStore } from "@/subagents/provider-store";
+import { providerSubagentKey, useProviderSubagentStore } from "@/subagents/provider-store";
+import { nativePerformanceTrace } from "@/performance/native-trace";
 
 // Re-export types from session-store and draft-store for backward compatibility
 export type { DraftInput } from "@/stores/draft-store";
@@ -534,7 +535,31 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
     const unsubProviderSubagentUpdate = onFeed("agent.provider_subagents.update", (message) => {
       if (message.type !== "agent.provider_subagents.update") return;
-      useProviderSubagentStore.getState().applyUpdate(serverId, message.payload);
+      const store = useProviderSubagentStore.getState();
+      const payload = message.payload;
+      if (!nativePerformanceTrace.isEnabled()) {
+        store.applyUpdate(serverId, payload);
+        return;
+      }
+      const timeline =
+        payload.kind === "timeline"
+          ? store.timelines.get(
+              providerSubagentKey(serverId, payload.parentAgentId, payload.subagentId),
+            )
+          : undefined;
+      nativePerformanceTrace.beginSection("paseo.provider.ingest", {
+        kind: payload.kind,
+        item: payload.kind === "timeline" ? payload.item.type : "none",
+        children: String(store.descriptors.size),
+        timelines: String(store.timelines.size),
+        tail: String(timeline?.tail.length ?? 0),
+        head: String(timeline?.head.length ?? 0),
+      });
+      try {
+        store.applyUpdate(serverId, payload);
+      } finally {
+        nativePerformanceTrace.endSection();
+      }
     });
 
     const unsubCheckoutStatusUpdate = onFeed("checkout_status_update", (message) => {

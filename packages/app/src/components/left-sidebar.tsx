@@ -123,7 +123,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const isCompactLayout = useIsCompactFormFactor();
-  const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
+  const dismissMobilePanel = usePanelStore((state) => state.dismissMobilePanel);
 
   const {
     projects,
@@ -160,27 +160,27 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   const { open: openImportSession, sheet: importSessionSheet } = useImportSession();
 
   const handleOpenProjectMobile = useCallback(() => {
-    showMobileAgent();
+    dismissMobilePanel();
     void openProjectPicker();
-  }, [showMobileAgent, openProjectPicker]);
+  }, [dismissMobilePanel, openProjectPicker]);
 
   const handleOpenProjectDesktop = useCallback(() => {
     void openProjectPicker();
   }, [openProjectPicker]);
 
   const handleSettingsMobile = useCallback(() => {
-    showMobileAgent();
+    dismissMobilePanel();
     router.push(buildSettingsRoute());
-  }, [showMobileAgent]);
+  }, [dismissMobilePanel]);
 
   const handleSettingsDesktop = useCallback(() => {
     router.push(buildSettingsRoute());
   }, []);
 
   const handleAddHostMobile = useCallback(() => {
-    showMobileAgent();
+    dismissMobilePanel();
     router.push(buildSettingsAddHostRoute(Date.now()));
-  }, [showMobileAgent]);
+  }, [dismissMobilePanel]);
 
   const handleAddHostDesktop = useCallback(() => {
     router.push(buildSettingsAddHostRoute(Date.now()));
@@ -188,10 +188,10 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
 
   const handleOpenHostSettingsMobile = useCallback(
     (serverId: string) => {
-      showMobileAgent();
+      dismissMobilePanel();
       openHostOverview(serverId);
     },
-    [showMobileAgent],
+    [dismissMobilePanel],
   );
 
   const handleOpenHostSettingsDesktop = useCallback((serverId: string) => {
@@ -199,9 +199,9 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   }, []);
 
   const handleImportSessionMobile = useCallback(() => {
-    showMobileAgent();
+    dismissMobilePanel();
     openImportSession();
-  }, [openImportSession, showMobileAgent]);
+  }, [openImportSession, dismissMobilePanel]);
 
   const labels = useMemo(
     (): SidebarLabels => ({
@@ -244,7 +244,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
             active={active}
             insetsTop={insets.top}
             insetsBottom={insets.bottom}
-            closeSidebar={showMobileAgent}
+            closeSidebar={dismissMobilePanel}
             handleOpenProject={handleOpenProjectMobile}
             handleImportSession={handleImportSessionMobile}
             handleSettings={handleSettingsMobile}

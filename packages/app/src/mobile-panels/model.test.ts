@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { MobilePanelView } from "@/stores/panel-store";
 import {
+  dismissMobilePanelSelection,
+  setMobilePanelTarget,
+  type MobilePanelSelection,
+} from "@/stores/panel-store/state";
+import {
   canBeginMobilePanelGesture,
   createMobilePanelMotionState,
   getMobilePanelFrame,
@@ -13,18 +18,32 @@ import {
 } from "./model";
 
 class MobilePanelsScenario {
-  private nextRevision = 0;
+  private selection: MobilePanelSelection;
   private startedRevision = -1;
   private state: MobilePanelMotionState;
   readonly commits: MobilePanelCommit[] = [];
 
   constructor(target: MobilePanelView = "agent") {
-    this.state = createMobilePanelMotionState({ target, revision: this.nextRevision });
+    this.selection = { target, revision: 0 };
+    this.state = createMobilePanelMotionState(this.selection);
   }
 
   command(target: MobilePanelView) {
-    this.nextRevision += 1;
-    this.dispatch({ type: "command", selection: { target, revision: this.nextRevision } });
+    this.selection = setMobilePanelTarget(this.selection, target);
+    this.dispatch({ type: "command", selection: this.selection });
+    return this;
+  }
+
+  dismiss() {
+    this.selection = dismissMobilePanelSelection(this.selection);
+    this.dispatch({ type: "command", selection: this.selection });
+    return this;
+  }
+
+  acceptCommit(commit: MobilePanelCommit) {
+    if (commit.startedRevision === this.selection.revision) {
+      this.command(commit.target);
+    }
     return this;
   }
 
@@ -138,6 +157,68 @@ describe("mobile panel ownership", () => {
       position: -1,
     }).state;
     expect(isMobilePanelActive(settled, "agent-list")).toBe(true);
+  });
+
+  it("lets Close supersede a queued open even when the durable target is already center", () => {
+    const panels = new MobilePanelsScenario();
+    panels.beginGesture("agent").finishGesture("agent-list").settleAt(-1);
+    const queuedOpen = panels.commits[0]!;
+
+    panels.dismiss().acceptCommit(queuedOpen).settleAt(-1).settleAt(0);
+
+    expect(panels.snapshot()).toEqual({
+      target: "agent",
+      motionTarget: "agent",
+      settledTarget: "agent",
+      revision: 1,
+    });
+  });
+
+  it("keeps newer navigation after a row dismissal overtakes a queued open", () => {
+    const panels = new MobilePanelsScenario();
+    panels.beginGesture("agent").finishGesture("agent-list").settleAt(-1);
+    const queuedOpen = panels.commits[0]!;
+
+    panels.dismiss().command("file-explorer").acceptCommit(queuedOpen).settleAt(-1).settleAt(1);
+
+    expect(panels.snapshot()).toEqual({
+      target: "file-explorer",
+      motionTarget: "file-explorer",
+      settledTarget: "file-explorer",
+      revision: 2,
+    });
+  });
+
+  it("republishes settlement when a newer dismissal overtakes a queued center publication", () => {
+    const initial = createMobilePanelMotionState({ target: "agent-list", revision: 0 });
+    const dismissed = transitionMobilePanel(initial, {
+      type: "command",
+      selection: dismissMobilePanelSelection(initial),
+    }).state;
+    const settled = transitionMobilePanel(dismissed, {
+      type: "position.changed",
+      position: 0,
+    }).state;
+    // RN has not yet handled the revision-1 center publication scheduled at this anchor.
+    const latestSelection = dismissMobilePanelSelection(settled);
+    expect(settled.revision).not.toBe(latestSelection.revision);
+    const repeatedDismissal = transitionMobilePanel(settled, {
+      type: "command",
+      selection: latestSelection,
+    }).state;
+    const latestSettlement = transitionMobilePanel(repeatedDismissal, {
+      type: "position.changed",
+      position: 0,
+    });
+
+    // Provider publishes only when this transition changes state. Geometry alone is unchanged.
+    expect(latestSettlement.state).not.toBe(repeatedDismissal);
+    expect(latestSettlement.state.settledRevision).toBe(latestSelection.revision);
+    expect(latestSettlement.state.settledTarget).toBe("agent");
+    expect(
+      transitionMobilePanel(latestSettlement.state, { type: "position.changed", position: 0 })
+        .state,
+    ).toBe(latestSettlement.state);
   });
 
   it("does not change activity for a cancelled preview", () => {

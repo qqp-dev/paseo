@@ -92,7 +92,7 @@ export function CompactExplorerSidebar({
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const isActive = useIsMobilePanelActive("file-explorer");
-  const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
+  const dismissMobilePanel = usePanelStore((state) => state.dismissMobilePanel);
   const { explorerTab, handleTabPress } = useExplorerSidebarSharedState({
     serverId,
     workspaceRoot,
@@ -111,9 +111,9 @@ export function CompactExplorerSidebar({
         reason,
         isOpen: isActive,
       });
-      showMobileAgent();
+      dismissMobilePanel();
     },
-    [isActive, showMobileAgent],
+    [isActive, dismissMobilePanel],
   );
 
   const handleHeaderClose = useCallback(() => handleClose("header-close-button"), [handleClose]);

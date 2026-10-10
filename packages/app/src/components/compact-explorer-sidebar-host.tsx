@@ -111,7 +111,7 @@ export function CompactExplorerSidebarHost({
   const model = useActiveCompactExplorerSidebarModel(enabled);
   const [containerWidth, setContainerWidth] = useState(0);
   const openCompactFileExplorer = usePanelStore((state) => state.openCompactFileExplorer);
-  const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
+  const dismissMobilePanel = usePanelStore((state) => state.dismissMobilePanel);
   const openTab = useWorkspaceLayoutStore((state) => state.openTab);
   const openWorkspaceTabInFocusedPane = useCallback(
     (workspaceKey: string, target: WorkspaceTabTarget) =>
@@ -140,12 +140,12 @@ export function CompactExplorerSidebarHost({
         filePath,
         persistenceKey: model.persistenceKey,
         closeExplorerAfterOpen: presentation === "overlay",
-        showMobileAgent,
+        showMobileAgent: dismissMobilePanel,
         openWorkspaceTabInFocusedPane,
         focusWorkspaceTab,
       });
     },
-    [focusWorkspaceTab, model, openWorkspaceTabInFocusedPane, presentation, showMobileAgent],
+    [dismissMobilePanel, focusWorkspaceTab, model, openWorkspaceTabInFocusedPane, presentation],
   );
 
   const handleContainerLayout = useCallback((event: LayoutChangeEvent) => {

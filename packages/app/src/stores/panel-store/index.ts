@@ -13,6 +13,7 @@ import {
   buildToggleFileExplorerPatch,
   clampTreeRailWidth,
   clampSidebarWidth,
+  dismissMobilePanelSelection,
   DEFAULT_TREE_RAIL_WIDTH,
   DEFAULT_SIDEBAR_WIDTH,
   MAX_TREE_RAIL_WIDTH,
@@ -84,6 +85,7 @@ export interface PanelState {
   toggleFocusMode: () => void;
   exitFocusMode: () => void;
   showMobileAgent: () => void;
+  dismissMobilePanel: () => void;
   showMobileAgentList: () => void;
   toggleMobileAgentList: () => void;
   openDesktopAgentList: () => void;
@@ -156,6 +158,9 @@ export const usePanelStore = create<PanelState>()(
         ),
 
       showMobileAgent: () => set((state) => setMobilePanelTargetPatch(state, "agent")),
+
+      dismissMobilePanel: () =>
+        set((state) => ({ mobilePanel: dismissMobilePanelSelection(state.mobilePanel) })),
 
       showMobileAgentList: () => set((state) => setMobilePanelTargetPatch(state, "agent-list")),
 

@@ -26,18 +26,22 @@ export function MobilePanelOverlay({
   panelStyle,
 }: MobilePanelOverlayProps) {
   const { position, windowWidth } = useMobilePanelsRuntime();
-  const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
+  const dismissMobilePanel = usePanelStore((state) => state.dismissMobilePanel);
   const isOpen = useIsMobilePanelActive(panel);
   const isLeft = panel === "agent-list";
+  // Native children inherit the existing UI-position gate on the animated overlay.
+  // A React activity commit may arrive after the visible drawer's first touch.
+  const inputPointerEvents = isWeb && !isOpen ? "none" : "auto";
 
   useLayoutEffect(() => {
     if (!isProfileBuild) return;
     traceInstant("paseo.panel.input.render", {
       panel,
-      pointerEvents: isOpen ? "auto" : "none",
+      pointerEvents: inputPointerEvents,
+      gate: isWeb ? "settled-react" : "ui-position",
       accessibilityHidden: String(!isOpen),
     });
-  }, [isOpen, panel]);
+  }, [inputPointerEvents, isOpen, panel]);
 
   const sidebarAnimatedStyle = useAnimatedStyle(() => {
     const frame = getMobilePanelFrame(position.value, windowWidth);
@@ -103,15 +107,15 @@ export function MobilePanelOverlay({
             accessible={false}
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
-            onPress={showMobileAgent}
-            pointerEvents={isOpen ? "auto" : "none"}
+            onPress={dismissMobilePanel}
+            pointerEvents={inputPointerEvents}
             style={StyleSheet.absoluteFillObject}
             testID={isOpen ? `${panel}-backdrop` : undefined}
           >
             <Animated.View pointerEvents="none" style={backdropStyle} />
           </Pressable>
 
-          <Animated.View pointerEvents={isOpen ? "auto" : "none"} style={combinedPanelStyle}>
+          <Animated.View pointerEvents={inputPointerEvents} style={combinedPanelStyle}>
             <WindowChromeRootRegion corners="both">{children}</WindowChromeRootRegion>
           </Animated.View>
         </Animated.View>

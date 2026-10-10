@@ -2644,6 +2644,7 @@ export class HostRuntimeStore {
     const replica = this.timelineReplicaByServer.get(serverId);
     if (!replica) throw new Error(`Unknown host runtime for serverId ${serverId}`);
     return createViewedTimelineOwner({
+      trace: nativePerformanceTrace,
       serverId,
       replica,
       replaceDemandedAgentIds: (agentIds) => directory.setAgentRouteDemand(agentIds),

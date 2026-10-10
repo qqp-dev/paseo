@@ -77,6 +77,11 @@ export function setMobilePanelTarget(
   return { target, revision: selection.revision + 1 };
 }
 
+/** A visible overlay can be dismissed before its queued opening command reaches RN. */
+export function dismissMobilePanelSelection(selection: MobilePanelSelection): MobilePanelSelection {
+  return { target: "agent", revision: selection.revision + 1 };
+}
+
 function resolveExplorerTabFromCheckout(
   state: PanelCoreState,
   checkout: ExplorerCheckoutContext,
